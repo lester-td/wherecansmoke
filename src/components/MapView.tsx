@@ -2,5 +2,79 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Coordinates, DsaCollection } from '../types/dsa';
-const ORCHARD:[number,number]=[1.3039,103.8338];
-export default function MapView({data,position,selectedId,onSelect,onManualSelect}:{data:DsaCollection;position:Coordinates|null;selectedId:number|null;onSelect:(id:number)=>void;onManualSelect:(value:Coordinates)=>void}){ const node=useRef<HTMLDivElement>(null); const mapRef=useRef<L.Map|null>(null); const layerRef=useRef<L.LayerGroup|null>(null); useEffect(()=>{if(!node.current||mapRef.current)return; const map=L.map(node.current,{zoomControl:true,minZoom:11,maxZoom:20}).setView(ORCHARD,16); L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.onemap.gov.sg/">OneMap</a>, SLA',maxZoom:20}).addTo(map); map.on('click',event=>onManualSelect({latitude:event.latlng.lat,longitude:event.latlng.lng,source:'manual'})); mapRef.current=map; setTimeout(()=>map.invalidateSize(),0); return()=>{map.remove();mapRef.current=null;};},[onManualSelect]); useEffect(()=>{const map=mapRef.current;if(!map)return;layerRef.current?.remove();const layers=L.layerGroup().addTo(map); data.features.forEach(feature=>{const [lon,lat]=feature.geometry.coordinates;const selected=feature.properties.OBJECTID===selectedId;const marker=L.circleMarker([lat,lon],{radius:selected?10:7,color:selected?'#0b0c0c':'#d6ff3f',weight:selected?3:2,fillColor:selected?'#d6ff3f':'#141616',fillOpacity:1}).addTo(layers).bindTooltip(feature.properties.BUILDING_N,{direction:'top'});marker.on('click',()=>onSelect(feature.properties.OBJECTID));}); if(position){const point=L.latLng(position.latitude,position.longitude);if(position.accuracy)L.circle(point,{radius:position.accuracy,color:'#69c9ff',weight:1,fillColor:'#69c9ff',fillOpacity:.12}).addTo(layers);L.circleMarker(point,{radius:7,color:'#e8f7ff',weight:2,fillColor:'#319bd1',fillOpacity:1}).addTo(layers).bindTooltip(position.source==='manual'?'Selected start':'Your position');map.setView(point,17);} layerRef.current=layers;},[data,position,selectedId,onSelect]); return <div className="map-wrap"><div ref={node} className="map" role="application" aria-label="Map of designated smoking areas. Click or tap to choose a starting location."/><p className="map-hint">Tap anywhere to set a manual start point · lime: DSA · blue: you</p></div>}
+import type { WalkingRoute } from '../types/route';
+
+const ORCHARD: [number, number] = [1.3039, 103.8338];
+
+export default function MapView({
+  data,
+  position,
+  selectedId,
+  route,
+  onSelect,
+  onManualSelect,
+}: {
+  data: DsaCollection;
+  position: Coordinates | null;
+  selectedId: number | null;
+  route: WalkingRoute | null;
+  onSelect: (id: number) => void;
+  onManualSelect: (value: Coordinates) => void;
+}) {
+  const node = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!node.current || mapRef.current) return;
+    const map = L.map(node.current, { zoomControl: true, minZoom: 11, maxZoom: 20 }).setView(ORCHARD, 16);
+    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.onemap.gov.sg/">OneMap</a>, SLA',
+      maxZoom: 20,
+    }).addTo(map);
+    map.on('click', (event) => onManualSelect({ latitude: event.latlng.lat, longitude: event.latlng.lng, source: 'manual' }));
+    mapRef.current = map;
+    setTimeout(() => map.invalidateSize(), 0);
+    return () => { map.remove(); mapRef.current = null; };
+  }, [onManualSelect]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    layerRef.current?.remove();
+    const layers = L.layerGroup().addTo(map);
+
+    data.features.forEach((feature) => {
+      const [longitude, latitude] = feature.geometry.coordinates;
+      const selected = feature.properties.OBJECTID === selectedId;
+      const marker = L.circleMarker([latitude, longitude], {
+        radius: selected ? 10 : 7,
+        color: selected ? '#0b0c0c' : '#d6ff3f',
+        weight: selected ? 3 : 2,
+        fillColor: selected ? '#d6ff3f' : '#141616',
+        fillOpacity: 1,
+      }).addTo(layers).bindTooltip(feature.properties.BUILDING_N, { direction: 'top' });
+      marker.on('click', () => onSelect(feature.properties.OBJECTID));
+    });
+
+    if (route) {
+      const routePoints = route.coordinates.map(([longitude, latitude]) => L.latLng(latitude, longitude));
+      L.polyline(routePoints, { color: '#d6ff3f', weight: 5, opacity: 0.9, lineJoin: 'bevel' }).addTo(layers);
+      if (routePoints.length > 1) map.fitBounds(L.latLngBounds(routePoints), { padding: [36, 36], maxZoom: 18 });
+    } else if (position) {
+      map.setView([position.latitude, position.longitude], 17);
+    }
+
+    if (position) {
+      const point = L.latLng(position.latitude, position.longitude);
+      if (position.accuracy) L.circle(point, { radius: position.accuracy, color: '#69c9ff', weight: 1, fillColor: '#69c9ff', fillOpacity: 0.12 }).addTo(layers);
+      L.circleMarker(point, { radius: 7, color: '#e8f7ff', weight: 2, fillColor: '#319bd1', fillOpacity: 1 })
+        .addTo(layers)
+        .bindTooltip(position.source === 'manual' ? 'Selected start' : 'Your position');
+    }
+
+    layerRef.current = layers;
+  }, [data, position, selectedId, route, onSelect]);
+
+  return <div className="map-wrap"><div ref={node} className="map" role="application" aria-label="Map of designated smoking areas and selected walking route. Click or tap to choose a starting location."/><p className="map-hint">Tap to set start · lime: DSA / walking route · blue: you</p></div>;
+}

@@ -38,7 +38,7 @@ npm run build
 
 React and TypeScript run on Vite. Concerns are separated into UI components (`src/components`), browser location state (`src/hooks`), geospatial and validation utilities (`src/lib`), domain types (`src/types`), and the versioned dataset (`src/data`). Leaflet is dynamically imported so mapping code is split from the initial bundle. OneMap tiles do not need an API token.
 
-Distances shown in the current UI are straight-line estimates. They are not walking distances and the UI never describes them as such. `api/walking.ts` is a narrowly scoped, no-store Vercel function for openrouteservice walking requests. It accepts only Singapore coordinates and returns normalised route geometry, distance, duration, and steps. The UI degrades deliberately to straight-line ranking rather than inventing route data when routing is unavailable.
+Results are shortlisted using straight-line distance. Selecting a DSA requests an actual pedestrian route and shows its line, distance, duration, and steps separately from the air-line estimate. `api/walking.ts` is a narrowly scoped, no-store Vercel function for openrouteservice walking requests. It accepts only Singapore coordinates and returns normalised route geometry, distance, duration, and steps. The UI degrades deliberately to straight-line ranking rather than inventing route data when routing is unavailable.
 
 ## Official data and attribution
 
@@ -73,7 +73,7 @@ Walking routing uses openrouteservice. Its key must never use a `VITE_` prefix o
 OPENROUTESERVICE_API_KEY=your-key
 ```
 
-Responses and location inputs use `Cache-Control: private, no-store`. Do not add request logging that includes query strings. The OneMap basemap does not require this key; openrouteservice is used only for optional walking routes.
+Responses and location inputs use `Cache-Control: private, no-store`. Do not add request logging that includes query strings. The OneMap basemap does not require this key; openrouteservice is used only for walking routes. Local Vite development exposes the same narrowly scoped endpoint; production uses the Vercel function.
 
 ## Vercel and base-path deployment
 

@@ -1,5 +1,79 @@
-import { MapPin, Navigation } from 'lucide-react';
+import { Clock3, MapPin, Navigation, Route } from 'lucide-react';
 import { formatDistance } from '../lib/geo';
 import type { RankedDsa } from '../types/dsa';
-function photoUrl(value:string){return value;}
-export function DsaCard({item,index,selected,onSelect}:{item:RankedDsa;index:number;selected:boolean;onSelect:()=>void}){const p=item.feature.properties;return <article className={`result-card ${selected?'selected':''}`}><button className="result-main" onClick={onSelect} aria-pressed={selected}><span className="rank">{String(index+1).padStart(2,'0')}</span><span className="result-copy"><strong>{p.BUILDING_N}</strong><span>{p.DESCRIPTION}</span></span><span className="distance"><b>{formatDistance(item.distanceMetres)}</b><small><Navigation size={12}/>{item.direction} · {Math.round(item.bearingDegrees)}°</small></span></button>{selected&&<div className="result-detail"><img src={photoUrl(p.PHOTOURL)} alt={`NEA reference photograph for ${p.BUILDING_N}: ${p.DESCRIPTION}`} loading="lazy" onError={e=>{e.currentTarget.hidden=true}}/><div><p><MapPin size={14}/> Straight-line estimate. Optional walking routes are provided by openrouteservice when configured.</p><p>Coordinates are a reference, not a legal guarantee. Follow the NEA description, photograph and on-site signs.</p></div></div>}</article>}
+import type { RouteStatus, WalkingRoute } from '../types/route';
+
+function duration(seconds: number) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} min`;
+}
+
+export function DsaCard({
+  item,
+  index,
+  selected,
+  onSelect,
+  route,
+  routeStatus,
+  routeMessage,
+}: {
+  item: RankedDsa;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+  route: WalkingRoute | null;
+  routeStatus: RouteStatus;
+  routeMessage: string;
+}) {
+  const properties = item.feature.properties;
+
+  return (
+    <article className={`result-card ${selected ? 'selected' : ''}`}>
+      <button className="result-main" onClick={onSelect} aria-pressed={selected}>
+        <span className="rank">{String(index + 1).padStart(2, '0')}</span>
+        <span className="result-copy">
+          <strong>{properties.BUILDING_N}</strong>
+          <span>{properties.DESCRIPTION}</span>
+        </span>
+        <span className="distance">
+          <b>{route && selected ? `${formatDistance(route.distanceMetres)} walk` : formatDistance(item.distanceMetres)}</b>
+          <small>
+            {route && selected ? <Clock3 size={12} /> : <Navigation size={12} />}
+            {route && selected ? duration(route.durationSeconds) : `${item.direction} · ${Math.round(item.bearingDegrees)}° air-line`}
+          </small>
+        </span>
+      </button>
+
+      {selected && (
+        <div className="result-detail">
+          <img
+            src={properties.PHOTOURL}
+            alt={`NEA reference photograph for ${properties.BUILDING_N}: ${properties.DESCRIPTION}`}
+            loading="lazy"
+            onError={(event) => { event.currentTarget.hidden = true; }}
+          />
+
+          <div className={`route-state ${routeStatus}`} role="status" aria-live="polite">
+            <Route size={15} />
+            <span>{routeMessage}</span>
+          </div>
+
+          {route && (
+            <ol className="route-steps" aria-label="Walking directions">
+              {route.steps.filter((step) => step.instruction).map((step, stepIndex) => (
+                <li key={`${step.way_points[0]}-${stepIndex}`}>
+                  <span>{String(stepIndex + 1).padStart(2, '0')}</span>
+                  <p>{step.instruction}</p>
+                  <small>{formatDistance(step.distance)}</small>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <p><MapPin size={14} /> Air-line distance: {formatDistance(item.distanceMetres)}. Route data uses OpenStreetMap and may not reflect indoor, upper-level, or restricted access.</p>
+          <p>Coordinates are a reference, not a legal guarantee. Follow the NEA description, photograph and on-site signs.</p>
+        </div>
+      )}
+    </article>
+  );
+}
