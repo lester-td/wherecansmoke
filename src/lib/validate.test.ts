@@ -1,0 +1,4 @@
+import { validateDataset } from './validate';
+import { describe, expect, it } from 'vitest';
+const valid={type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[103.83,1.3]},properties:{OBJECTID:1,DESCRIPTION:'Side',BUILDING_N:'Building',PHOTOURL:'',Y:1,X:1,INC_CRC:'x',FMEL_UPD_D:'20250101000000'}}]};
+describe('dataset validation',()=>{it('accepts valid data',()=>expect(()=>validateDataset(valid)).not.toThrow());it('rejects coordinates outside Singapore',()=>expect(()=>validateDataset({...valid,features:[{...valid.features[0],geometry:{type:'Point',coordinates:[0,0]}}]})).toThrow(/outside Singapore/));it('rejects missing required text',()=>expect(()=>validateDataset({...valid,features:[{...valid.features[0],properties:{...valid.features[0].properties,DESCRIPTION:''}}]})).toThrow(/required properties/))});
