@@ -1,1 +1,1 @@
-{"rewrites":[{"source":"/code/wherecansmoke/api/:path*","destination":"/api/:path*"},{"source":"/code/wherecansmoke/:path*","destination":"/index.html"},{"source":"/:path*","destination":"/index.html"}]}
+{"rewrites":[{"source":"/:path*","destination":"/index.html"}]}

@@ -80,9 +80,9 @@ Vercel settings:
 - Framework: Vite
 - Build command: `npm run build`
 - Output directory: `dist`
-- Production base path: `/code/wherecansmoke/`
+- Production base path: `/`
 
-`vercel.json` handles the SPA fallback and base-path API rewrites.
+`vercel.json` handles the SPA fallback.
 
 ## Privacy
 

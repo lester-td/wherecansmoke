@@ -102,7 +102,7 @@ function localWalkingApi(apiKey: string | undefined): Plugin {
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: command === 'serve' ? '/' : '/code/wherecansmoke/',
+    base: '/',
     plugins: [react(), geoJson, ...(command === 'serve' ? [localWalkingApi(env.OPENROUTESERVICE_API_KEY)] : [])],
     test: { environment: 'node' },
   };
