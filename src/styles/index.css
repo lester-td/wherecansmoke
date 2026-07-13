@@ -28,7 +28,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--lime);outline-offse
 .titlebar-meta{color:#858a88;font-weight:400}
 .dashboard{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(360px,.8fr);gap:10px;align-items:start}
 .map{height:min(68vh,650px);min-height:460px;background:#181b1b}
-.map-wrap{position:relative}
+.map-wrap{position:relative;z-index:0;isolation:isolate}
 .map-loading{height:500px;display:grid;place-items:center;color:var(--muted)}
 .leaflet-container{font-family:inherit}
 .leaflet-control-zoom a{border-radius:0!important;background:#171919!important;color:#fff!important}
