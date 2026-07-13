@@ -9,6 +9,7 @@ const ORCHARD: [number, number] = [1.3039, 103.8338];
 export default function MapView({
   data,
   position,
+  searchOrigin,
   selectedId,
   route,
   onSelect,
@@ -16,6 +17,7 @@ export default function MapView({
 }: {
   data: DsaCollection;
   position: Coordinates | null;
+  searchOrigin: Coordinates | null;
   selectedId: number | null;
   route: WalkingRoute | null;
   onSelect: (id: number) => void;
@@ -60,21 +62,43 @@ export default function MapView({
     if (route) {
       const routePoints = route.coordinates.map(([longitude, latitude]) => L.latLng(latitude, longitude));
       L.polyline(routePoints, { color: '#d6ff3f', weight: 5, opacity: 0.9, lineJoin: 'bevel' }).addTo(layers);
-      if (routePoints.length > 1) map.fitBounds(L.latLngBounds(routePoints), { padding: [36, 36], maxZoom: 18 });
-    } else if (position) {
-      map.setView([position.latitude, position.longitude], 17);
     }
 
     if (position) {
       const point = L.latLng(position.latitude, position.longitude);
       if (position.accuracy) L.circle(point, { radius: position.accuracy, color: '#69c9ff', weight: 1, fillColor: '#69c9ff', fillOpacity: 0.12 }).addTo(layers);
-      L.circleMarker(point, { radius: 7, color: '#e8f7ff', weight: 2, fillColor: '#319bd1', fillOpacity: 1 })
-        .addTo(layers)
-        .bindTooltip(position.source === 'manual' ? 'Selected start' : 'Your position');
+      const hasHeading = position.source === 'device' && position.heading !== undefined && (position.speed === undefined || position.speed >= 0.4);
+      if (hasHeading) {
+        const heading = ((position.heading ?? 0) % 360 + 360) % 360;
+        L.marker(point, {
+          icon: L.divIcon({
+            className: 'gps-heading-marker',
+            html: `<span class="gps-heading-arrow" style="transform:rotate(${heading}deg)" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 17 4 21Z"/></svg></span>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+          }),
+          keyboard: false,
+        }).addTo(layers).bindTooltip('Your direction');
+      } else {
+        L.circleMarker(point, { radius: 7, color: '#e8f7ff', weight: 2, fillColor: '#319bd1', fillOpacity: 1 })
+          .addTo(layers)
+          .bindTooltip(position.source === 'manual' ? 'Selected start' : 'Your position');
+      }
     }
 
     layerRef.current = layers;
   }, [data, position, selectedId, route, onSelect]);
 
-  return <div className="map-wrap"><div ref={node} className="map" role="application" aria-label="Map of designated smoking areas and selected walking route. Click or tap to choose a starting location."/><p className="map-hint">Tap to set start · lime: DSA / walking route · blue: you</p></div>;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (route) {
+      const routePoints = route.coordinates.map(([longitude, latitude]) => L.latLng(latitude, longitude));
+      if (routePoints.length > 1) map.fitBounds(L.latLngBounds(routePoints), { padding: [36, 36], maxZoom: 18 });
+    } else if (searchOrigin) {
+      map.setView([searchOrigin.latitude, searchOrigin.longitude], 17);
+    }
+  }, [route, searchOrigin?.latitude, searchOrigin?.longitude]);
+
+  return <div className="map-wrap"><div ref={node} className="map" role="application" aria-label="Map of designated smoking areas and selected walking route. Click or tap to choose a starting location."/></div>;
 }

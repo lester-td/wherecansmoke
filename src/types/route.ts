@@ -15,4 +15,10 @@ export interface WalkingRoute {
   steps: WalkingStep[];
 }
 
+export interface WalkingMatrix {
+  provider: 'openrouteservice';
+  distancesMetres: Array<number | null>;
+  durationsSeconds: Array<number | null>;
+}
+
 export type RouteStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';

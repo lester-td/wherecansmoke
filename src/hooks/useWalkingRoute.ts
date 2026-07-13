@@ -33,7 +33,7 @@ export function useWalkingRoute(origin: Coordinates | null, destination: Coordin
       .then((body) => {
         setRoute(body);
         setStatus('ready');
-        setMessage('Walking route calculated with openrouteservice.');
+        setMessage('');
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;

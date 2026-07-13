@@ -8,10 +8,11 @@ WhereCanSmoke? is an independent project. It is not affiliated with or endorsed 
 
 ## Features
 
-- Browser location is requested only after pressing **Use my location**.
-- Device coordinates and reported accuracy are shown honestly; low accuracy and out-of-area fixes trigger warnings.
-- All 52 local DSA points are ranked with Haversine straight-line distance and initial bearing.
-- The interactive OneMap shows DSA markers, selection, user position, and the GPS accuracy circle.
+- Browser location is requested only after pressing **Use GPS**.
+- After the first fix, live GPS updates move the user marker without refreshing results; **Update results** explicitly searches again from the latest fix.
+- Low GPS accuracy and out-of-area fixes trigger warnings.
+- The five straight-line candidates are reordered using walking estimates when routing is available.
+- The interactive OneMap shows DSA markers, selection, the live user position, movement heading when available, GPS accuracy, and the selected route.
 - Tapping the map provides a manual fallback when location is unavailable or denied.
 - NEA location descriptions and reference photos are prominent because access may be behind a building, near a service yard, or on another level.
 - No user location is stored, persisted, or logged. There is no application client-side storage.
@@ -38,7 +39,7 @@ npm run build
 
 React and TypeScript run on Vite. Concerns are separated into UI components (`src/components`), browser location state (`src/hooks`), geospatial and validation utilities (`src/lib`), domain types (`src/types`), and the versioned dataset (`src/data`). Leaflet is dynamically imported so mapping code is split from the initial bundle. OneMap tiles do not need an API token.
 
-Results are shortlisted using straight-line distance. Selecting a DSA requests an actual pedestrian route and shows its line, distance, duration, and steps separately from the air-line estimate. `api/walking.ts` is a narrowly scoped, no-store Vercel function for openrouteservice walking requests. It accepts only Singapore coordinates and returns normalised route geometry, distance, duration, and steps. The UI degrades deliberately to straight-line ranking rather than inventing route data when routing is unavailable.
+Results are first shortlisted using straight-line distance. `api/walking-matrix.ts` then makes one no-store openrouteservice matrix request for walking estimates to the five candidates, which are reordered by walking distance. Selecting a DSA uses `api/walking.ts` to request its full pedestrian route, including geometry and steps. Both functions accept only Singapore coordinates. The UI degrades deliberately to straight-line ranking rather than inventing route data when routing is unavailable.
 
 ## Official data and attribution
 
@@ -90,7 +91,7 @@ The application runs top-level at that path and links normally back to `/code`; 
 
 ## Privacy
 
-Location is held only in React memory for the current tab. The app has no analytics, location logging, cookies, IndexedDB, localStorage, or sessionStorage. Device coordinates are sent nowhere in the default straight-line experience. If optional walking routing is enabled, the selected start and candidate endpoints are transiently sent through this project's no-store proxy to openrouteservice solely to calculate the requested route.
+Location is held only in React memory for the current tab. The app has no analytics, location logging, cookies, IndexedDB, localStorage, or sessionStorage. Live GPS fixes only move the map marker; they are not used for new routing requests until **Update results** is pressed. If walking routing is configured, that fixed search origin and five shortlisted endpoints are transiently sent through this project's no-store proxy to openrouteservice to calculate walking estimates; the selected endpoint is also sent to calculate its full route. Without routing configuration, the experience remains entirely straight-line and coordinates are not sent by the app.
 
 ## Limitations
 
