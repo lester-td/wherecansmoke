@@ -12,6 +12,13 @@ import type { Coordinates, DsaCollection } from './types/dsa';
 
 const MapView = lazy(() => import('./components/MapView'));
 const ORCHARD_CENTRE = { latitude: 1.3048, longitude: 103.8335 };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function datasetDate(collection: DsaCollection) {
+  const latest = collection.features.reduce((value, feature) => feature.properties.FMEL_UPD_D > value ? feature.properties.FMEL_UPD_D : value, '');
+  if (!/^\d{14}$/.test(latest)) return 'Unknown';
+  return `${latest.slice(6, 8)} ${MONTHS[Number(latest.slice(4, 6)) - 1]} ${latest.slice(0, 4)}`;
+}
 
 let dataError = '';
 let data: DsaCollection = { type: 'FeatureCollection', features: [] };
@@ -21,6 +28,7 @@ try {
 } catch (error) {
   dataError = error instanceof Error ? error.message : 'Unknown dataset error';
 }
+const DATASET_DATE = datasetDate(data);
 
 export default function App() {
   const location = useGeolocation();
@@ -144,7 +152,7 @@ export default function App() {
 
         <Window as="footer" title="PROJECT_INFO" className="footer-window">
           <div className="footer-content">
-            <div className="footer-brand">WhereCanSmoke / v0.1</div>
+            <div className="footer-brand">WhereCanSmoke / v0.1 / Dataset Date: {DATASET_DATE}</div>
             <p className="footer-disclaimer">WhereCanSmoke? is an independent, unofficial project. It is not affiliated with or endorsed by NEA, OneMap, SLA, openrouteservice, OpenStreetMap, or the Singapore Government.</p>
             <div className="footer-links">
               <a href="https://data.gov.sg/datasets/d_d0fa8f07ef80ab23feaa3b870323bf27/view" target="_blank" rel="noreferrer">NEA DSA Dataset <ExternalLink size={12}/></a>
