@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Cigarette, Crosshair, ExternalLink, LocateFixed, MapPin, MapPinned } from 'lucide-react';
 import rawData from './data/dsa.geojson';
 import { DsaCard } from './components/DsaCard';
@@ -32,8 +32,11 @@ const DATASET_DATE = datasetDate(data);
 
 export default function App() {
   const location = useGeolocation();
+  const locateOnLoad = useRef(location.locate);
   const displayedPosition = location.livePosition ?? location.position;
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showNeaNoSmoking, setShowNeaNoSmoking] = useState(true);
+  const [showNparksNoSmoking, setShowNparksNoSmoking] = useState(true);
   const straightRanked = useMemo(() => location.position ? rankDsas(data, location.position) : [], [location.position]);
   const shortlist = useMemo(() => straightRanked.slice(0, 5), [straightRanked]);
   const walkingMatrix = useWalkingMatrix(location.position, shortlist);
@@ -47,7 +50,7 @@ export default function App() {
   }, [shortlist, walkingMatrix.matrix]);
   const visible = ranked;
   const matrixPending = location.position !== null && (walkingMatrix.status === 'idle' || walkingMatrix.status === 'loading');
-  const selected = matrixPending ? undefined : ranked.find((item) => item.feature.properties.OBJECTID === selectedId) ?? ranked[0];
+  const selected = matrixPending ? undefined : ranked.find((item) => item.feature.properties.OBJECTID === selectedId);
   const destination = useMemo<Coordinates | null>(() => {
     if (!selected) return null;
     const [longitude, latitude] = selected.feature.geometry.coordinates;
@@ -56,17 +59,16 @@ export default function App() {
   const walking = useWalkingRoute(location.position, destination);
 
   useEffect(() => {
+    locateOnLoad.current();
+  }, []);
+
+  useEffect(() => {
     setSelectedId(null);
   }, [location.position?.latitude, location.position?.longitude]);
 
-  useEffect(() => {
-    if (!matrixPending && ranked.length && selectedId === null) setSelectedId(ranked[0].feature.properties.OBJECTID);
-  }, [matrixPending, ranked, selectedId]);
-
   const chooseManual = useCallback((point: Coordinates) => {
+    setSelectedId(null);
     location.setManual(point);
-    const first = rankDsas(data, point)[0];
-    if (first) setSelectedId(first.feature.properties.OBJECTID);
   }, [location.setManual]);
 
   const outside = displayedPosition && distanceMetres(displayedPosition, ORCHARD_CENTRE) > 5000;
@@ -120,13 +122,19 @@ export default function App() {
           <div className="map-column">
             <Window title="AREA_MAP" className="map-window">
               <Suspense fallback={<div className="map-loading">Loading map module…</div>}>
-                <MapView data={data} position={displayedPosition} searchOrigin={location.position} selectedId={selected?.feature.properties.OBJECTID ?? null} route={walking.route} onSelect={setSelectedId} onManualSelect={chooseManual}/>
+                <MapView data={data} position={displayedPosition} searchOrigin={location.position} selectedId={selected?.feature.properties.OBJECTID ?? null} route={walking.route} showNeaNoSmoking={showNeaNoSmoking} showNparksNoSmoking={showNparksNoSmoking} onSelect={setSelectedId} onManualSelect={chooseManual}/>
               </Suspense>
             </Window>
 
-            <Window title="LEGEND" className="legend-window">
+            <Window title="LEGEND" meta="TAP AREAS TO TOGGLE" className="legend-window">
               <div className="legend-content">
                 <span><i className="legend-marker dsa" aria-hidden="true"/>Smoking Area</span>
+                <button className="legend-toggle" type="button" aria-pressed={showNeaNoSmoking} onClick={() => setShowNeaNoSmoking((visible) => !visible)}>
+                  <i className="legend-area nea" aria-hidden="true"/>NEA No-Smoking Zone
+                </button>
+                <button className="legend-toggle" type="button" aria-pressed={showNparksNoSmoking} onClick={() => setShowNparksNoSmoking((visible) => !visible)}>
+                  <i className="legend-area nparks" aria-hidden="true"/>NParks No-Smoking Area
+                </button>
                 <span><i className="legend-marker user" aria-hidden="true"/>You</span>
                 <span><i className="legend-line" aria-hidden="true"/>Route</span>
               </div>
@@ -152,16 +160,24 @@ export default function App() {
 
         <Window as="footer" title="PROJECT_INFO" className="footer-window">
           <div className="footer-content">
-            <div className="footer-brand">WhereCanSmoke / v0.1 / Dataset Date: {DATASET_DATE}</div>
-            <p className="footer-disclaimer">WhereCanSmoke? is an independent, unofficial project. It is not affiliated with or endorsed by NEA, OneMap, SLA, openrouteservice, OpenStreetMap, or the Singapore Government.</p>
+            <div className="footer-brand">WhereCanSmoke / v0.1</div>
+            <p className="footer-disclaimer">WhereCanSmoke? is an independent, unofficial project. It is not affiliated with or endorsed by NEA, NParks, OneMap, SLA, openrouteservice, OpenStreetMap, or the Singapore Government.</p>
+            <div className="footer-dataset-date">DSA Dataset Date: {DATASET_DATE}</div>
             <div className="footer-links">
-              <a href="https://data.gov.sg/datasets/d_d0fa8f07ef80ab23feaa3b870323bf27/view" target="_blank" rel="noreferrer">NEA DSA Dataset <ExternalLink size={12}/></a>
-              <span aria-hidden="true">/</span>
-              <a href="https://www.nea.gov.sg/ORNSZ" target="_blank" rel="noreferrer">NEA ORNSZ <ExternalLink size={12}/></a>
-              <span aria-hidden="true">/</span>
-              <a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">SLA OneMap <ExternalLink size={12}/></a>
-              <span aria-hidden="true">/</span>
-              <a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">openrouteservice <ExternalLink size={12}/></a>
+              <div className="footer-link-row">
+                <a href="https://data.gov.sg/datasets/d_d0fa8f07ef80ab23feaa3b870323bf27/view" target="_blank" rel="noreferrer">Designated Smoking Areas (NEA) <ExternalLink size={12}/></a>
+                <span aria-hidden="true">/</span>
+                <a href="https://data.gov.sg/datasets/d_491641889c8add4c7835721bd72aa84a/view" target="_blank" rel="noreferrer">No Smoking Zones (NEA) <ExternalLink size={12}/></a>
+                <span aria-hidden="true">/</span>
+                <a href="https://data.gov.sg/datasets/d_3c8343c1efaeb05d4d1dbcdd0f599077/view" target="_blank" rel="noreferrer">No-Smoking Locations (NParks) <ExternalLink size={12}/></a>
+              </div>
+              <div className="footer-link-row">
+                <a href="https://www.nea.gov.sg/ORNSZ" target="_blank" rel="noreferrer">NEA ORNSZ <ExternalLink size={12}/></a>
+                <span aria-hidden="true">/</span>
+                <a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">SLA OneMap <ExternalLink size={12}/></a>
+                <span aria-hidden="true">/</span>
+                <a href="https://openrouteservice.org/" target="_blank" rel="noreferrer">openrouteservice <ExternalLink size={12}/></a>
+              </div>
             </div>
           </div>
         </Window>

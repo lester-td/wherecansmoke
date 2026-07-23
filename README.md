@@ -2,16 +2,18 @@
 
 Unofficial locator for Designated Smoking Areas (DSAs) in Singapore. Current data coverage is focused on Orchard Road.
 
-WhereCanSmoke? is not affiliated with or endorsed by NEA, OneMap, SLA, openrouteservice, OpenStreetMap, or the Singapore Government. Verify the NEA description, reference photo, and on-site signs.
+WhereCanSmoke? is not affiliated with or endorsed by NEA, NParks, OneMap, SLA, openrouteservice, OpenStreetMap, or the Singapore Government. Verify the official descriptions, reference photo, and on-site signs.
 
 ## Features
 
-- GPS or manual map location
+- Automatic GPS request on load, with manual map location as a fallback
 - Live GPS marker and movement heading
 - Explicit **Update results** action; live movement does not refresh results
 - Five nearby DSAs ranked by walking distance when routing is available
+- Walking directions and route line only after a DSA is selected
 - Straight-line fallback when routing is unavailable
-- OneMap map, walking route, directions, GPS accuracy, and NEA photos
+- OneMap Grey basemap, walking route, directions, GPS accuracy, and NEA photos
+- Toggleable NEA and NParks no-smoking boundary layers
 - No analytics, location storage, cookies, or browser storage
 
 ## Development
@@ -37,7 +39,7 @@ npm run build
 ## Stack and routing
 
 - React, TypeScript, and Vite
-- Leaflet with OneMap tiles
+- MapLibre GL JS with the OneMap Grey style
 - Vercel functions for openrouteservice requests
 - Checked-in GeoJSON dataset
 
@@ -53,16 +55,18 @@ Without a key, the app uses straight-line distance.
 
 ## Data and attribution
 
-Dataset: [NEA Designated Smoking Areas](https://data.gov.sg/datasets/d_d0fa8f07ef80ab23feaa3b870323bf27/view)
+Datasets:
 
-- File: `src/data/dsa.geojson`
-- Agency: National Environment Agency
-- Coverage: November 2025
-- Published: 19 March 2026
-- Snapshot retrieved: 13 July 2026
+- [NEA Designated Smoking Areas](https://data.gov.sg/datasets/d_d0fa8f07ef80ab23feaa3b870323bf27/view)
+- [NEA No Smoking Zones](https://data.gov.sg/datasets/d_491641889c8add4c7835721bd72aa84a/view)
+- [NParks No-Smoking Locations](https://data.gov.sg/datasets/d_3c8343c1efaeb05d4d1dbcdd0f599077/view)
+
+- `src/data/dsa.geojson`: NEA DSA data covering November 2025; snapshot retrieved 13 July 2026
+- `src/data/no-smoking-zones.geojson`: NEA Orchard no-smoking zone dated February 2024; snapshot retrieved 23 July 2026
+- `src/data/nparks-no-smoking.geojson`: NParks indicative managed areas; snapshot retrieved 23 July 2026
 - Licence: [Singapore Open Data Licence](https://data.gov.sg/open-data-licence)
 
-Map data and tiles: [OneMap](https://www.onemap.gov.sg/) / Singapore Land Authority. Walking routes: [openrouteservice](https://openrouteservice.org/) using OpenStreetMap data.
+Map rendering: [MapLibre GL JS](https://maplibre.org/). Map data and tiles: [OneMap](https://www.onemap.gov.sg/) / Singapore Land Authority. Walking routes: [openrouteservice](https://openrouteservice.org/) using OpenStreetMap data.
 
 Update and validate the dataset:
 
@@ -93,7 +97,9 @@ When routing is enabled, the search origin and five candidate endpoints are sent
 ## Limitations
 
 - Dataset coverage is Orchard-focused.
+- The NEA no-smoking-zone snapshot is dated February 2024 and may be outdated.
+- The NParks layer covers indicative managed areas; park connectors are also no-smoking zones but are not drawn in the source layer.
 - GPS accuracy and heading can drift near dense buildings.
 - Routes may omit indoor, upper-level, or restricted paths.
 - NEA reference photo URLs may change or fail.
-- OneMap tile requests expose standard request metadata but do not include user coordinates.
+- OneMap tile and style requests expose standard request metadata but do not include user coordinates.

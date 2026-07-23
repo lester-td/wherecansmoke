@@ -104,6 +104,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     base: '/',
     plugins: [react(), geoJson, ...(command === 'serve' ? [localWalkingApi(env.OPENROUTESERVICE_API_KEY)] : [])],
+    optimizeDeps: { exclude: ['maplibre-gl'] },
     test: { environment: 'node' },
   };
 });
