@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { FeatureCollection, GeoJSON as GeoJson, LineString, Point, Polygon } from 'geojson';
+import type { StyleSpecification } from 'maplibre-gl';
 import noSmokingZonesUrl from '../data/no-smoking-zones.geojson?url';
 import nparksNoSmokingUrl from '../data/nparks-no-smoking.geojson?url';
 import type { Coordinates, DsaCollection } from '../types/dsa';
@@ -9,7 +10,7 @@ import type { NoSmokingCollection } from '../types/noSmoking';
 import type { WalkingRoute } from '../types/route';
 
 const ORCHARD: [number, number] = [103.8338, 1.3039];
-const ONEMAP_GREY_STYLE = 'https://www.onemap.gov.sg/maps/json/raster/mbstyle/Grey.json';
+const ONEMAP_GREY_TILES = 'https://www.onemap.gov.sg/maps/tiles/Grey_HD/{z}/{x}/{y}.png';
 const DSA_SOURCE = 'designated-smoking-areas';
 const DSA_LAYER = 'designated-smoking-areas-points';
 const NEA_SOURCE = 'nea-no-smoking-zone';
@@ -23,6 +24,7 @@ const ACCURACY_FILL = 'gps-accuracy-fill';
 const ACCURACY_LINE = 'gps-accuracy-line';
 const ROUTE_SOURCE = 'walking-route';
 const ROUTE_LAYER = 'walking-route-line';
+const EMPTY_FEATURES: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 async function loadNoSmokingCollection(url: string) {
   const response = await fetch(url);
@@ -32,8 +34,56 @@ async function loadNoSmokingCollection(url: string) {
 
 function setGeoJson(map: maplibregl.Map, id: string, data: GeoJson) {
   const source = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
-  if (source) source.setData(data);
-  else map.addSource(id, { type: 'geojson', data });
+  source?.setData(data);
+}
+
+function initialMapStyle(dsaGeoJson: FeatureCollection<Point>): StyleSpecification {
+  return {
+    version: 8,
+    name: 'WhereCanSmoke OneMap Grey',
+    sources: {
+      'onemap-grey': {
+        type: 'raster',
+        tiles: [ONEMAP_GREY_TILES],
+        tileSize: 128,
+        minzoom: 11,
+        maxzoom: 20,
+        bounds: [103.596, 1.1443, 104.4309, 1.4835],
+      },
+      [NEA_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
+      [NPARKS_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
+      [ACCURACY_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
+      [ROUTE_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
+      [DSA_SOURCE]: { type: 'geojson', data: dsaGeoJson },
+    },
+    layers: [
+      { id: 'onemap-grey', type: 'raster', source: 'onemap-grey' },
+      { id: NEA_FILL, type: 'fill', source: NEA_SOURCE, paint: { 'fill-color': '#ff625e', 'fill-opacity': 0.14 } },
+      { id: NEA_LINE, type: 'line', source: NEA_SOURCE, paint: { 'line-color': '#ff625e', 'line-width': 2, 'line-opacity': 0.95, 'line-dasharray': [3.5, 2.5] } },
+      { id: NPARKS_FILL, type: 'fill', source: NPARKS_SOURCE, paint: { 'fill-color': '#ffb84d', 'fill-opacity': 0.16 } },
+      { id: NPARKS_LINE, type: 'line', source: NPARKS_SOURCE, paint: { 'line-color': '#ffb84d', 'line-width': 1.5, 'line-opacity': 0.9 } },
+      { id: ACCURACY_FILL, type: 'fill', source: ACCURACY_SOURCE, paint: { 'fill-color': '#69c9ff', 'fill-opacity': 0.12 } },
+      { id: ACCURACY_LINE, type: 'line', source: ACCURACY_SOURCE, paint: { 'line-color': '#69c9ff', 'line-width': 1 } },
+      {
+        id: ROUTE_LAYER,
+        type: 'line',
+        source: ROUTE_SOURCE,
+        layout: { 'line-join': 'bevel', 'line-cap': 'round' },
+        paint: { 'line-color': '#d6ff3f', 'line-width': 5, 'line-opacity': 0.9 },
+      },
+      {
+        id: DSA_LAYER,
+        type: 'circle',
+        source: DSA_SOURCE,
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#141616',
+          'circle-stroke-color': '#d6ff3f',
+          'circle-stroke-width': 2,
+        },
+      },
+    ],
+  };
 }
 
 function routeGeoJson(route: WalkingRoute | null): FeatureCollection<LineString> {
@@ -63,10 +113,6 @@ function accuracyGeoJson(position: Coordinates | null): FeatureCollection<Polygo
     type: 'FeatureCollection',
     features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }],
   };
-}
-
-function overlayAnchor(map: maplibregl.Map) {
-  return [ACCURACY_FILL, ROUTE_LAYER, DSA_LAYER].find((id) => map.getLayer(id));
 }
 
 export default function MapView({
@@ -129,7 +175,7 @@ export default function MapView({
       if (!node.current || mapRef.current) return;
       map = new maplibregl.Map({
         container: node.current,
-        style: ONEMAP_GREY_STYLE,
+        style: initialMapStyle(dsaGeoJson),
         center: ORCHARD,
         zoom: 16,
         minZoom: 11,
@@ -161,6 +207,13 @@ export default function MapView({
       map.on('error', handleError);
       map.on('click', handleClick);
       mapRef.current = map;
+
+      // An inline or memory-cached style can be ready before React observes a
+      // load event. Check once after listeners and the ref are installed so
+      // production never misses the signal that enables overlay updates.
+      queueMicrotask(() => {
+        if (map?.isStyleLoaded()) handleLoad();
+      });
     };
     const initializationTimer = window.setTimeout(initialize, 0);
 
@@ -173,7 +226,7 @@ export default function MapView({
       map?.remove();
       if (mapRef.current === map) mapRef.current = null;
     };
-  }, [onManualSelect]);
+  }, [dsaGeoJson, onManualSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -182,16 +235,12 @@ export default function MapView({
 
     if (boundaryData.nea) {
       setGeoJson(map, NEA_SOURCE, boundaryData.nea as unknown as FeatureCollection);
-      if (!map.getLayer(NEA_FILL)) map.addLayer({ id: NEA_FILL, type: 'fill', source: NEA_SOURCE, paint: { 'fill-color': '#ff625e', 'fill-opacity': 0.14 } }, overlayAnchor(map));
-      if (!map.getLayer(NEA_LINE)) map.addLayer({ id: NEA_LINE, type: 'line', source: NEA_SOURCE, paint: { 'line-color': '#ff625e', 'line-width': 2, 'line-opacity': 0.95, 'line-dasharray': [3.5, 2.5] } }, overlayAnchor(map));
       map.setLayoutProperty(NEA_FILL, 'visibility', visibility(showNeaNoSmoking));
       map.setLayoutProperty(NEA_LINE, 'visibility', visibility(showNeaNoSmoking));
     }
 
     if (boundaryData.nparks) {
       setGeoJson(map, NPARKS_SOURCE, boundaryData.nparks as unknown as FeatureCollection);
-      if (!map.getLayer(NPARKS_FILL)) map.addLayer({ id: NPARKS_FILL, type: 'fill', source: NPARKS_SOURCE, paint: { 'fill-color': '#ffb84d', 'fill-opacity': 0.16 } }, overlayAnchor(map));
-      if (!map.getLayer(NPARKS_LINE)) map.addLayer({ id: NPARKS_LINE, type: 'line', source: NPARKS_SOURCE, paint: { 'line-color': '#ffb84d', 'line-width': 1.5, 'line-opacity': 0.9 } }, overlayAnchor(map));
       map.setLayoutProperty(NPARKS_FILL, 'visibility', visibility(showNparksNoSmoking));
       map.setLayoutProperty(NPARKS_LINE, 'visibility', visibility(showNparksNoSmoking));
     }
@@ -201,39 +250,17 @@ export default function MapView({
     const map = mapRef.current;
     if (!mapReady || !map) return;
     setGeoJson(map, ACCURACY_SOURCE, accuracyGeoJson(position));
-    if (!map.getLayer(ACCURACY_FILL)) map.addLayer({ id: ACCURACY_FILL, type: 'fill', source: ACCURACY_SOURCE, paint: { 'fill-color': '#69c9ff', 'fill-opacity': 0.12 } });
-    if (!map.getLayer(ACCURACY_LINE)) map.addLayer({ id: ACCURACY_LINE, type: 'line', source: ACCURACY_SOURCE, paint: { 'line-color': '#69c9ff', 'line-width': 1 } });
   }, [mapReady, position]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
     setGeoJson(map, ROUTE_SOURCE, routeGeoJson(route));
-    if (!map.getLayer(ROUTE_LAYER)) map.addLayer({
-      id: ROUTE_LAYER,
-      type: 'line',
-      source: ROUTE_SOURCE,
-      layout: { 'line-join': 'bevel', 'line-cap': 'round' },
-      paint: { 'line-color': '#d6ff3f', 'line-width': 5, 'line-opacity': 0.9 },
-    }, map.getLayer(DSA_LAYER) ? DSA_LAYER : undefined);
   }, [mapReady, route]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    setGeoJson(map, DSA_SOURCE, dsaGeoJson);
-    if (!map.getLayer(DSA_LAYER)) map.addLayer({
-      id: DSA_LAYER,
-      type: 'circle',
-      source: DSA_SOURCE,
-      paint: {
-        'circle-radius': 7,
-        'circle-color': '#141616',
-        'circle-stroke-color': '#d6ff3f',
-        'circle-stroke-width': 2,
-      },
-    });
-
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'map-tooltip' });
     const handleEnter = (event: maplibregl.MapLayerMouseEvent) => {
       map.getCanvas().style.cursor = 'pointer';
