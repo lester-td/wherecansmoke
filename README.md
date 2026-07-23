@@ -39,7 +39,7 @@ npm run build
 ## Stack and routing
 
 - React, TypeScript, and Vite
-- MapLibre GL JS with the OneMap Grey style
+- Leaflet with OneMap Grey tiles
 - Vercel functions for openrouteservice requests
 - Checked-in GeoJSON dataset
 
@@ -66,7 +66,7 @@ Datasets:
 - `src/data/nparks-no-smoking.geojson`: NParks indicative managed areas; snapshot retrieved 23 July 2026
 - Licence: [Singapore Open Data Licence](https://data.gov.sg/open-data-licence)
 
-Map rendering: [MapLibre GL JS](https://maplibre.org/). Map data and tiles: [OneMap](https://www.onemap.gov.sg/) / Singapore Land Authority. Walking routes: [openrouteservice](https://openrouteservice.org/) using OpenStreetMap data.
+Map rendering: [Leaflet](https://leafletjs.com/). Map data and tiles: [OneMap](https://www.onemap.gov.sg/) / Singapore Land Authority. Walking routes: [openrouteservice](https://openrouteservice.org/) using OpenStreetMap data.
 
 Update and validate the dataset:
 

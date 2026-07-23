@@ -1,124 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import * as maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import type { FeatureCollection, GeoJSON as GeoJson, LineString, Point, Polygon } from 'geojson';
-import type { StyleSpecification } from 'maplibre-gl';
+import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import type { GeoJsonObject } from 'geojson';
 import noSmokingZonesUrl from '../data/no-smoking-zones.geojson?url';
 import nparksNoSmokingUrl from '../data/nparks-no-smoking.geojson?url';
 import type { Coordinates, DsaCollection } from '../types/dsa';
 import type { NoSmokingCollection } from '../types/noSmoking';
 import type { WalkingRoute } from '../types/route';
 
-// MapLibre resolves its worker relative to the bundled module by default.
-// Vite moves that module, so emit the worker as a real production asset and
-// give MapLibre its hashed URL explicitly for module-worker MIME enforcement.
-maplibregl.setWorkerUrl(maplibreWorkerUrl);
-
-const ORCHARD: [number, number] = [103.8338, 1.3039];
-const ONEMAP_GREY_TILES = 'https://www.onemap.gov.sg/maps/tiles/Grey_HD/{z}/{x}/{y}.png';
-const DSA_SOURCE = 'designated-smoking-areas';
-const DSA_LAYER = 'designated-smoking-areas-points';
-const NEA_SOURCE = 'nea-no-smoking-zone';
-const NEA_FILL = 'nea-no-smoking-zone-fill';
-const NEA_LINE = 'nea-no-smoking-zone-line';
-const NPARKS_SOURCE = 'nparks-no-smoking-areas';
-const NPARKS_FILL = 'nparks-no-smoking-areas-fill';
-const NPARKS_LINE = 'nparks-no-smoking-areas-line';
-const ACCURACY_SOURCE = 'gps-accuracy';
-const ACCURACY_FILL = 'gps-accuracy-fill';
-const ACCURACY_LINE = 'gps-accuracy-line';
-const ROUTE_SOURCE = 'walking-route';
-const ROUTE_LAYER = 'walking-route-line';
-const EMPTY_FEATURES: FeatureCollection = { type: 'FeatureCollection', features: [] };
+const ORCHARD: L.LatLngExpression = [1.3039, 103.8338];
+const ONEMAP_GREY_TILES = 'https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png';
+const ATTRIBUTION = '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> © contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>';
 
 async function loadNoSmokingCollection(url: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Boundary data request failed: ${response.status}`);
   return response.json() as Promise<NoSmokingCollection>;
-}
-
-function setGeoJson(map: maplibregl.Map, id: string, data: GeoJson) {
-  const source = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
-  source?.setData(data);
-}
-
-function initialMapStyle(dsaGeoJson: FeatureCollection<Point>): StyleSpecification {
-  return {
-    version: 8,
-    name: 'WhereCanSmoke OneMap Grey',
-    sources: {
-      'onemap-grey': {
-        type: 'raster',
-        tiles: [ONEMAP_GREY_TILES],
-        tileSize: 128,
-        minzoom: 11,
-        maxzoom: 20,
-        bounds: [103.596, 1.1443, 104.4309, 1.4835],
-      },
-      [NEA_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
-      [NPARKS_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
-      [ACCURACY_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
-      [ROUTE_SOURCE]: { type: 'geojson', data: EMPTY_FEATURES },
-      [DSA_SOURCE]: { type: 'geojson', data: dsaGeoJson },
-    },
-    layers: [
-      { id: 'onemap-grey', type: 'raster', source: 'onemap-grey' },
-      { id: NEA_FILL, type: 'fill', source: NEA_SOURCE, paint: { 'fill-color': '#ff625e', 'fill-opacity': 0.14 } },
-      { id: NEA_LINE, type: 'line', source: NEA_SOURCE, paint: { 'line-color': '#ff625e', 'line-width': 2, 'line-opacity': 0.95, 'line-dasharray': [3.5, 2.5] } },
-      { id: NPARKS_FILL, type: 'fill', source: NPARKS_SOURCE, paint: { 'fill-color': '#ffb84d', 'fill-opacity': 0.16 } },
-      { id: NPARKS_LINE, type: 'line', source: NPARKS_SOURCE, paint: { 'line-color': '#ffb84d', 'line-width': 1.5, 'line-opacity': 0.9 } },
-      { id: ACCURACY_FILL, type: 'fill', source: ACCURACY_SOURCE, paint: { 'fill-color': '#69c9ff', 'fill-opacity': 0.12 } },
-      { id: ACCURACY_LINE, type: 'line', source: ACCURACY_SOURCE, paint: { 'line-color': '#69c9ff', 'line-width': 1 } },
-      {
-        id: ROUTE_LAYER,
-        type: 'line',
-        source: ROUTE_SOURCE,
-        layout: { 'line-join': 'bevel', 'line-cap': 'round' },
-        paint: { 'line-color': '#d6ff3f', 'line-width': 5, 'line-opacity': 0.9 },
-      },
-      {
-        id: DSA_LAYER,
-        type: 'circle',
-        source: DSA_SOURCE,
-        paint: {
-          'circle-radius': 7,
-          'circle-color': '#141616',
-          'circle-stroke-color': '#d6ff3f',
-          'circle-stroke-width': 2,
-        },
-      },
-    ],
-  };
-}
-
-function routeGeoJson(route: WalkingRoute | null): FeatureCollection<LineString> {
-  return route ? {
-    type: 'FeatureCollection',
-    features: [{
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'LineString', coordinates: route.coordinates },
-    }],
-  } : { type: 'FeatureCollection', features: [] };
-}
-
-function accuracyGeoJson(position: Coordinates | null): FeatureCollection<Polygon> {
-  if (!position?.accuracy || position.accuracy <= 0) return { type: 'FeatureCollection', features: [] };
-  const latitudeRadius = position.accuracy / 111_320;
-  const longitudeRadius = latitudeRadius / Math.max(Math.cos(position.latitude * Math.PI / 180), 0.01);
-  const ring: Array<[number, number]> = [];
-  for (let index = 0; index <= 64; index += 1) {
-    const angle = index / 64 * Math.PI * 2;
-    ring.push([
-      position.longitude + Math.cos(angle) * longitudeRadius,
-      position.latitude + Math.sin(angle) * latitudeRadius,
-    ]);
-  }
-  return {
-    type: 'FeatureCollection',
-    features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }],
-  };
 }
 
 export default function MapView({
@@ -143,19 +40,19 @@ export default function MapView({
   onManualSelect: (value: Coordinates) => void;
 }) {
   const node = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const dsaLayerRef = useRef<L.LayerGroup | null>(null);
+  const neaLayerRef = useRef<L.GeoJSON | null>(null);
+  const nparksLayerRef = useRef<L.GeoJSON | null>(null);
+  const positionLayerRef = useRef<L.LayerGroup | null>(null);
+  const routeLayerRef = useRef<L.Polyline | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [boundaryData, setBoundaryData] = useState<{ nea: NoSmokingCollection | null; nparks: NoSmokingCollection | null; failed: boolean }>({ nea: null, nparks: null, failed: false });
-  const dsaGeoJson = useMemo<FeatureCollection<Point>>(() => ({
-    type: 'FeatureCollection',
-    features: data.features.map((feature) => ({
-      type: 'Feature',
-      geometry: feature.geometry,
-      properties: feature.properties,
-    })),
-  }), [data]);
+  const [boundaryData, setBoundaryData] = useState<{
+    nea: NoSmokingCollection | null;
+    nparks: NoSmokingCollection | null;
+    failed: boolean;
+  }>({ nea: null, nparks: null, failed: false });
 
   useEffect(() => {
     let active = true;
@@ -175,171 +72,197 @@ export default function MapView({
 
   useEffect(() => {
     if (!node.current || mapRef.current) return;
-    let map: maplibregl.Map | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    const initialize = () => {
-      if (!node.current || mapRef.current) return;
-      map = new maplibregl.Map({
-        container: node.current,
-        style: initialMapStyle(dsaGeoJson),
-        center: ORCHARD,
-        zoom: 16,
-        minZoom: 11,
-        maxZoom: 20,
-        attributionControl: false,
-      });
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
-      map.addControl(new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution: '<img src="https://www.onemap.gov.sg/web-assets/images/logo/om_logo.png" alt="" width="16" height="16"/> <a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> © contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
-      }), 'bottom-right');
+    const map = L.map(node.current, {
+      center: ORCHARD,
+      zoom: 16,
+      minZoom: 11,
+      maxZoom: 20,
+      zoomControl: true,
+      attributionControl: false,
+    });
 
-      const handleLoad = () => {
-        setMapError(null);
-        setMapReady(true);
-      };
-      const handleError = () => setMapError('The OneMap basemap could not be loaded.');
-      const handleClick = (event: maplibregl.MapMouseEvent) => {
-        if (!map) return;
-        if (map.getLayer(DSA_LAYER) && map.queryRenderedFeatures(event.point, { layers: [DSA_LAYER] }).length) return;
-        onManualSelect({ latitude: event.lngLat.lat, longitude: event.lngLat.lng, source: 'manual' });
-      };
-      resizeObserver = new ResizeObserver(() => map?.resize());
-      resizeObserver.observe(node.current);
-      // OneMap's raster style can be ready for custom layers before every
-      // initial tile finishes loading, so do not gate overlays on `load` alone.
-      map.once('style.load', handleLoad);
-      map.once('load', handleLoad);
-      map.on('error', handleError);
-      map.on('click', handleClick);
-      mapRef.current = map;
+    const panes = [
+      ['no-smoking-pane', 410],
+      ['accuracy-pane', 420],
+      ['route-pane', 430],
+      ['dsa-pane', 440],
+    ] as const;
+    panes.forEach(([name, zIndex]) => {
+      const pane = map.createPane(name);
+      pane.style.zIndex = String(zIndex);
+      if (name !== 'dsa-pane') pane.style.pointerEvents = 'none';
+    });
 
-      // An inline or memory-cached style can be ready before React observes a
-      // load event. Check once after listeners and the ref are installed so
-      // production never misses the signal that enables overlay updates.
-      queueMicrotask(() => {
-        if (map?.isStyleLoaded()) handleLoad();
-      });
+    const tiles = L.tileLayer(ONEMAP_GREY_TILES, {
+      minZoom: 11,
+      maxZoom: 20,
+      attribution: ATTRIBUTION,
+    });
+    tiles.on('tileload', () => setMapError(null));
+    tiles.on('tileerror', () => setMapError('The OneMap basemap could not be loaded.'));
+    tiles.addTo(map);
+    L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(map);
+
+    const handleClick = (event: L.LeafletMouseEvent) => {
+      onManualSelect({ latitude: event.latlng.lat, longitude: event.latlng.lng, source: 'manual' });
     };
-    const initializationTimer = window.setTimeout(initialize, 0);
+    map.on('click', handleClick);
+    mapRef.current = map;
+    setMapReady(true);
+
+    const resizeObserver = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+    resizeObserver.observe(node.current);
+    window.setTimeout(() => map.invalidateSize({ animate: false }), 0);
 
     return () => {
-      window.clearTimeout(initializationTimer);
-      resizeObserver?.disconnect();
-      userMarkerRef.current?.remove();
-      userMarkerRef.current = null;
+      resizeObserver.disconnect();
+      map.off('click', handleClick);
+      map.remove();
+      mapRef.current = null;
+      dsaLayerRef.current = null;
+      neaLayerRef.current = null;
+      nparksLayerRef.current = null;
+      positionLayerRef.current = null;
+      routeLayerRef.current = null;
       setMapReady(false);
-      map?.remove();
-      if (mapRef.current === map) mapRef.current = null;
     };
-  }, [dsaGeoJson, onManualSelect]);
+  }, [onManualSelect]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    const visibility = (visible: boolean) => visible ? 'visible' as const : 'none' as const;
+    dsaLayerRef.current?.remove();
 
-    if (boundaryData.nea) {
-      setGeoJson(map, NEA_SOURCE, boundaryData.nea as unknown as FeatureCollection);
-      map.setLayoutProperty(NEA_FILL, 'visibility', visibility(showNeaNoSmoking));
-      map.setLayoutProperty(NEA_LINE, 'visibility', visibility(showNeaNoSmoking));
-    }
-
-    if (boundaryData.nparks) {
-      setGeoJson(map, NPARKS_SOURCE, boundaryData.nparks as unknown as FeatureCollection);
-      map.setLayoutProperty(NPARKS_FILL, 'visibility', visibility(showNparksNoSmoking));
-      map.setLayoutProperty(NPARKS_LINE, 'visibility', visibility(showNparksNoSmoking));
-    }
-  }, [boundaryData.nea, boundaryData.nparks, mapReady, showNeaNoSmoking, showNparksNoSmoking]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
-    setGeoJson(map, ACCURACY_SOURCE, accuracyGeoJson(position));
-  }, [mapReady, position]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
-    setGeoJson(map, ROUTE_SOURCE, routeGeoJson(route));
-  }, [mapReady, route]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map) return;
-    const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: 'map-tooltip' });
-    const handleEnter = (event: maplibregl.MapLayerMouseEvent) => {
-      map.getCanvas().style.cursor = 'pointer';
-      const feature = event.features?.[0];
-      if (!feature || feature.geometry.type !== 'Point') return;
-      popup.setLngLat(feature.geometry.coordinates as [number, number]).setText(String(feature.properties?.BUILDING_N ?? 'Designated smoking area')).addTo(map);
-    };
-    const handleLeave = () => {
-      map.getCanvas().style.cursor = '';
-      popup.remove();
-    };
-    const handleDsaClick = (event: maplibregl.MapLayerMouseEvent) => {
-      const id = Number(event.features?.[0]?.properties?.OBJECTID);
-      if (Number.isFinite(id)) onSelect(id);
-    };
-    map.on('mouseenter', DSA_LAYER, handleEnter);
-    map.on('mouseleave', DSA_LAYER, handleLeave);
-    map.on('click', DSA_LAYER, handleDsaClick);
+    const layer = L.layerGroup();
+    data.features.forEach((feature) => {
+      const [longitude, latitude] = feature.geometry.coordinates;
+      const selected = feature.properties.OBJECTID === selectedId;
+      const marker = L.circleMarker([latitude, longitude], {
+        pane: 'dsa-pane',
+        radius: selected ? 10 : 7,
+        color: selected ? '#0b0c0c' : '#d6ff3f',
+        weight: selected ? 3 : 2,
+        fillColor: selected ? '#d6ff3f' : '#141616',
+        fillOpacity: 1,
+        bubblingMouseEvents: false,
+      });
+      marker.bindTooltip(feature.properties.BUILDING_N, { direction: 'top', offset: [0, -8] });
+      marker.on('click', () => onSelect(feature.properties.OBJECTID));
+      marker.addTo(layer);
+    });
+    layer.addTo(map);
+    dsaLayerRef.current = layer;
     return () => {
-      popup.remove();
-      if (!map.getLayer(DSA_LAYER)) return;
-      map.off('mouseenter', DSA_LAYER, handleEnter);
-      map.off('mouseleave', DSA_LAYER, handleLeave);
-      map.off('click', DSA_LAYER, handleDsaClick);
+      layer.remove();
+      if (dsaLayerRef.current === layer) dsaLayerRef.current = null;
     };
-  }, [dsaGeoJson, mapReady, onSelect]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map || !map.getLayer(DSA_LAYER)) return;
-    const selected = selectedId ?? -1;
-    map.setPaintProperty(DSA_LAYER, 'circle-radius', ['case', ['==', ['get', 'OBJECTID'], selected], 10, 7]);
-    map.setPaintProperty(DSA_LAYER, 'circle-color', ['case', ['==', ['get', 'OBJECTID'], selected], '#d6ff3f', '#141616']);
-    map.setPaintProperty(DSA_LAYER, 'circle-stroke-color', ['case', ['==', ['get', 'OBJECTID'], selected], '#0b0c0c', '#d6ff3f']);
-    map.setPaintProperty(DSA_LAYER, 'circle-stroke-width', ['case', ['==', ['get', 'OBJECTID'], selected], 3, 2]);
-  }, [mapReady, selectedId]);
+  }, [data, mapReady, onSelect, selectedId]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    userMarkerRef.current?.remove();
-    userMarkerRef.current = null;
+    neaLayerRef.current?.remove();
+    neaLayerRef.current = null;
+    if (!boundaryData.nea) return;
+
+    const layer = L.geoJSON(boundaryData.nea as unknown as GeoJsonObject, {
+      pane: 'no-smoking-pane',
+      interactive: false,
+      style: { color: '#ff625e', weight: 2, opacity: 0.95, dashArray: '7 5', fillColor: '#ff625e', fillOpacity: 0.14 },
+    });
+    neaLayerRef.current = layer;
+    if (showNeaNoSmoking) layer.addTo(map);
+    return () => {
+      layer.remove();
+      if (neaLayerRef.current === layer) neaLayerRef.current = null;
+    };
+  }, [boundaryData.nea, mapReady, showNeaNoSmoking]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    nparksLayerRef.current?.remove();
+    nparksLayerRef.current = null;
+    if (!boundaryData.nparks) return;
+
+    const layer = L.geoJSON(boundaryData.nparks as unknown as GeoJsonObject, {
+      pane: 'no-smoking-pane',
+      interactive: false,
+      style: { color: '#ffb84d', weight: 1.5, opacity: 0.9, fillColor: '#ffb84d', fillOpacity: 0.16 },
+    });
+    nparksLayerRef.current = layer;
+    if (showNparksNoSmoking) layer.addTo(map);
+    return () => {
+      layer.remove();
+      if (nparksLayerRef.current === layer) nparksLayerRef.current = null;
+    };
+  }, [boundaryData.nparks, mapReady, showNparksNoSmoking]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    positionLayerRef.current?.remove();
+    positionLayerRef.current = null;
     if (!position) return;
 
+    const point: L.LatLngExpression = [position.latitude, position.longitude];
+    const layer = L.layerGroup();
+    if (position.accuracy && position.accuracy > 0) {
+      L.circle(point, {
+        pane: 'accuracy-pane',
+        radius: position.accuracy,
+        color: '#69c9ff',
+        weight: 1,
+        fillColor: '#69c9ff',
+        fillOpacity: 0.12,
+        interactive: false,
+      }).addTo(layer);
+    }
+
     const hasHeading = position.source === 'device' && position.heading !== undefined && (position.speed === undefined || position.speed >= 0.4);
-    const element = document.createElement('div');
-    element.style.pointerEvents = 'none';
-    element.setAttribute('aria-label', hasHeading ? 'Your direction' : position.source === 'manual' ? 'Selected start' : 'Your position');
     if (hasHeading) {
       const heading = ((position.heading ?? 0) % 360 + 360) % 360;
-      element.className = 'gps-heading-marker';
-      element.innerHTML = `<span class="gps-heading-arrow" style="transform:rotate(${heading}deg)" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 17 4 21Z"/></svg></span>`;
+      L.marker(point, {
+        interactive: false,
+        icon: L.divIcon({
+          className: 'gps-heading-marker',
+          html: `<span class="gps-heading-arrow" style="transform:rotate(${heading}deg)" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 17 4 21Z"/></svg></span>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        }),
+      }).addTo(layer);
     } else {
-      element.className = 'map-user-marker';
+      L.marker(point, {
+        interactive: false,
+        icon: L.divIcon({ className: 'map-user-marker', iconSize: [14, 14], iconAnchor: [7, 7] }),
+      }).addTo(layer);
     }
-    userMarkerRef.current = new maplibregl.Marker({ element, anchor: 'center' })
-      .setLngLat([position.longitude, position.latitude])
-      .addTo(map);
+    layer.addTo(map);
+    positionLayerRef.current = layer;
+    return () => {
+      layer.remove();
+      if (positionLayerRef.current === layer) positionLayerRef.current = null;
+    };
   }, [mapReady, position]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
+    routeLayerRef.current?.remove();
+    routeLayerRef.current = null;
+
     if (route && route.coordinates.length > 1) {
-      const bounds = new maplibregl.LngLatBounds(route.coordinates[0], route.coordinates[0]);
-      route.coordinates.slice(1).forEach((coordinate) => bounds.extend(coordinate));
-      map.fitBounds(bounds, { padding: 36, maxZoom: 18, duration: 0 });
+      const points = route.coordinates.map(([longitude, latitude]) => L.latLng(latitude, longitude));
+      const layer = L.polyline(points, { pane: 'route-pane', color: '#d6ff3f', weight: 5, opacity: 0.9, lineJoin: 'bevel', interactive: false }).addTo(map);
+      routeLayerRef.current = layer;
+      map.fitBounds(layer.getBounds(), { padding: [36, 36], maxZoom: 18, animate: false });
     } else if (searchOrigin) {
-      map.jumpTo({ center: [searchOrigin.longitude, searchOrigin.latitude], zoom: 17 });
+      map.setView([searchOrigin.latitude, searchOrigin.longitude], 17, { animate: false });
     }
   }, [mapReady, route, searchOrigin?.latitude, searchOrigin?.longitude]);
 
-  const alerts = [mapError, boundaryData.failed ? 'Some no-smoking boundaries could not be loaded.' : null].filter((message): message is string => Boolean(message));
+  const alerts = [mapError, boundaryData.failed ? 'Some no-smoking boundaries could not be loaded.' : null]
+    .filter((message): message is string => Boolean(message));
 
   return <div className="map-wrap">
     <div ref={node} className="map" role="application" aria-label="Map of designated smoking areas, no-smoking areas, and the selected walking route. Click or tap to choose a starting location."/>
