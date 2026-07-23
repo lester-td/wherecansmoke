@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { FeatureCollection, GeoJSON as GeoJson, LineString, Point, Polygon } from 'geojson';
 import type { StyleSpecification } from 'maplibre-gl';
 import noSmokingZonesUrl from '../data/no-smoking-zones.geojson?url';
@@ -8,6 +9,11 @@ import nparksNoSmokingUrl from '../data/nparks-no-smoking.geojson?url';
 import type { Coordinates, DsaCollection } from '../types/dsa';
 import type { NoSmokingCollection } from '../types/noSmoking';
 import type { WalkingRoute } from '../types/route';
+
+// MapLibre resolves its worker relative to the bundled module by default.
+// Vite moves that module, so emit the worker as a real production asset and
+// give MapLibre its hashed URL explicitly for module-worker MIME enforcement.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 const ORCHARD: [number, number] = [103.8338, 1.3039];
 const ONEMAP_GREY_TILES = 'https://www.onemap.gov.sg/maps/tiles/Grey_HD/{z}/{x}/{y}.png';
